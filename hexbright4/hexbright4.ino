@@ -203,6 +203,8 @@ void loop()
       byte bright = (long)(knob * knob) >> 8;
       // Avoid ever appearing off in this mode!
       if (bright < 8) bright = 8;
+      if (bright > 230) digitalWrite(DPIN_DRV_MODE, HIGH);
+      if (bright < 200) digitalWrite(DPIN_DRV_MODE, LOW);
       analogWrite(DPIN_DRV_EN, bright);
   
       Serial.print("Ang = ");
@@ -238,28 +240,16 @@ void loop()
   switch (mode)
   {
   case MODE_OFF:
-    if (btnDown && !newBtnDown)  // Button released
-      newMode = MODE_LOW;
-    if (btnDown && newBtnDown && (time-btnTime)>500)  // Held
-      newMode = MODE_KNOBBING;
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_LOW);
     break;
   case MODE_LOW:
-    if (btnDown && !newBtnDown)  // Button released
-      newMode = MODE_MED;
-    if (btnDown && newBtnDown && (time-btnTime)>500)  // Held
-      newMode = MODE_KNOBBING;
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_MED);
     break;
   case MODE_MED:
-    if (btnDown && !newBtnDown)  // Button released
-      newMode = MODE_HIGH;
-    if (btnDown && newBtnDown && (time-btnTime)>500)  // Held
-      newMode = MODE_KNOBBING;
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_HIGH);
     break;
   case MODE_HIGH:
-    if (btnDown && !newBtnDown)  // Button released
-      newMode = MODE_OFF;
-    if (btnDown && newBtnDown && (time-btnTime)>500)  // Held
-      newMode = MODE_KNOBBING;
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_OFF);
     break;
   case MODE_KNOBBING:
     if (btnDown && !newBtnDown)  // Button released
@@ -368,6 +358,24 @@ void loop()
     btnDown = newBtnDown;
     delay(50);
   }
+}
+
+byte chooseMode(byte btnDown, byte newBtnDown, unsigned long time, byte nextMode)
+{
+    byte ret = mode;
+
+    // Button released
+    if (btnDown && !newBtnDown) {
+        // TODO decide whether to turn off or return nextMode
+        ret = nextMode;
+    }
+
+    // Held
+    if (btnDown && newBtnDown && (time-btnTime)>500) {
+        ret = MODE_KNOBBING;
+    }
+
+    return ret;
 }
 
 void readAccel(char *acc)
