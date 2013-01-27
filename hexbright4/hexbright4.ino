@@ -10,6 +10,11 @@ Notes:
 
 // Settings
 #define OVERTEMP                315
+// Grace time between button presses to advance through modes after power on
+#define MODE_SWITCH_TIME        2000
+// Time until a button is considered held
+#define BUTTON_HOLD_TIME        500
+
 // Constants
 #define ACC_ADDRESS             0x4C
 #define ACC_REG_XOUT            0
@@ -47,6 +52,7 @@ Notes:
 // State
 byte mode = 0;
 unsigned long btnTime = 0;
+unsigned long modeChangeTime = 0;
 boolean btnDown = false;
 
 
@@ -96,6 +102,7 @@ void setup()
   Wire.endTransmission();
   
   btnTime = millis();
+  modeChangeTime = millis();
   btnDown = digitalRead(DPIN_RLED_SW);
   mode = MODE_OFF;
 
@@ -240,16 +247,16 @@ void loop()
   switch (mode)
   {
   case MODE_OFF:
-    newMode = chooseMode(btnDown, newBtnDown, time, MODE_LOW);
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_LOW, MODE_KNOBBING);
     break;
   case MODE_LOW:
-    newMode = chooseMode(btnDown, newBtnDown, time, MODE_MED);
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_MED, MODE_KNOBBING);
     break;
   case MODE_MED:
-    newMode = chooseMode(btnDown, newBtnDown, time, MODE_HIGH);
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_HIGH, MODE_KNOBBING);
     break;
   case MODE_HIGH:
-    newMode = chooseMode(btnDown, newBtnDown, time, MODE_OFF);
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_OFF, MODE_KNOBBING);
     break;
   case MODE_KNOBBING:
     if (btnDown && !newBtnDown)  // Button released
@@ -258,16 +265,10 @@ void loop()
       newMode = MODE_BLINKING_PREVIEW;
     break;
   case MODE_KNOBBED:
-    if (btnDown && !newBtnDown)  // Button released
-      newMode = MODE_OFF;
-    if (btnDown && newBtnDown && (time-btnTime)>500)  // Held
-      newMode = MODE_KNOBBING;
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_OFF, MODE_KNOBBING);
     break;
   case MODE_BLINKING:
-    if (btnDown && !newBtnDown)  // Button released
-      newMode = MODE_OFF;
-    if (btnDown && newBtnDown && (time-btnTime)>500)  // Held
-      newMode = MODE_BLINKING_PREVIEW;
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_OFF, MODE_BLINKING_PREVIEW);
     break;
   case MODE_BLINKING_PREVIEW:
     if (btnDown && !newBtnDown)  // Button released
@@ -276,10 +277,7 @@ void loop()
       newMode = MODE_DAZZLING_PREVIEW;
     break;
   case MODE_DAZZLING:
-    if (btnDown && !newBtnDown)  // Button released
-      newMode = MODE_OFF;
-    if (btnDown && newBtnDown && (time-btnTime)>500)  // Held
-      newMode = MODE_DAZZLING_PREVIEW;
+    newMode = chooseMode(btnDown, newBtnDown, time, MODE_OFF, MODE_DAZZLING_PREVIEW);
     break;
   case MODE_DAZZLING_PREVIEW:
     if (btnDown && !newBtnDown)  // Button released
@@ -331,7 +329,7 @@ void loop()
       break;
     case MODE_KNOBBED:
       Serial.println("Mode = knobbed");
-      break;
+     break;
     case MODE_BLINKING:
     case MODE_BLINKING_PREVIEW:
       Serial.println("Mode = blinking");
@@ -360,19 +358,26 @@ void loop()
   }
 }
 
-byte chooseMode(byte btnDown, byte newBtnDown, unsigned long time, byte nextMode)
+byte chooseMode(byte btnDown, byte newBtnDown, unsigned long time, byte clickMode, byte holdMode)
 {
+    // Return current mode by default
     byte ret = mode;
 
     // Button released
     if (btnDown && !newBtnDown) {
-        // TODO decide whether to turn off or return nextMode
-        ret = nextMode;
+        // If the mode hasn't recently been changed, go to off
+        if (mode != MODE_OFF && (time - modeChangeTime) > MODE_SWITCH_TIME) {
+            ret = MODE_OFF;
+        } else {
+            ret = clickMode;
+        }
+
+        modeChangeTime = time;
     }
 
     // Held
-    if (btnDown && newBtnDown && (time-btnTime)>500) {
-        ret = MODE_KNOBBING;
+    if (btnDown && newBtnDown && (time-btnTime)>BUTTON_HOLD_TIME) {
+        ret = holdMode;
     }
 
     return ret;
